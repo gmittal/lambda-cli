@@ -117,6 +117,10 @@ async def terminate(credentials, *, instance_ids):
     await browser.close()
 
 
+def ignore_handler(loop, context):
+    del loop, context  # ignore everything
+
+
 class Lambda:
     def __init__(self):
         self._credentials_path = os.path.expanduser(CREDENTIALS_PATH)
@@ -144,12 +148,16 @@ class Lambda:
                 f.write(f'{key} = {value}\n')
 
     def start(self, name=None, instance_type='gpu.1x.rtx6000'):
-        asyncio.get_event_loop().run_until_complete(provision(self._credentials,
-                                                              instance_type=instance_type))
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(ignore_handler)
+        loop.run_until_complete(provision(self._credentials, instance_type=instance_type))
 
     def kill(self, instance_id):
-        asyncio.get_event_loop().run_until_complete(terminate(self._credentials,
-                                                              instance_ids=[instance_id]))
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(ignore_handler)
+        loop.run_until_complete(terminate(self._credentials, instance_ids=[instance_id]))
 
     def ls(self):
-        asyncio.get_event_loop().run_until_complete(list_instances(self._credentials))
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(ignore_handler)
+        loop.run_until_complete(list_instances(self._credentials))
