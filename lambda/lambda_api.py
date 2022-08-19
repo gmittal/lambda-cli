@@ -6,6 +6,7 @@ import pathlib
 
 import jinja2
 import pendulum
+import petname
 import prettytable
 
 from pyppeteer import launch
@@ -103,9 +104,11 @@ async def get_ssh_keys(page):
     return key_list
 
 
-async def list_ssh_keys(credentials):
-    browser, page = await start_session(credentials)
-    key_list = await get_ssh_keys(page)
+def display_key_list(key_list):
+    if len(key_list) == 0:
+        print('No existing keys.')
+        return
+
     table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'NAME', 'CREATED', 'PUB_KEY'])
     table.left_padding_width = 0
     table.right_padding_width = 2
@@ -115,6 +118,45 @@ async def list_ssh_keys(credentials):
                        readable_time_duration(key['created']),
                        key['key'][:20] + '...'])
     print(table)
+
+
+async def list_ssh_keys(credentials):
+    browser, page = await start_session(credentials)
+    key_list = await get_ssh_keys(page)
+    display_key_list(key_list)
+    await browser.close()
+
+
+async def add_ssh_key(credentials, *, key, name=None):
+    if name is None:
+        name = petname.Generate()
+
+    browser, page = await start_session(credentials)
+    await page.goto('https://lambdalabs.com/cloud/ssh-keys')
+
+    codegen = jinja2.Template('''() => {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://lambdalabs.com/api/cloud/keypairs", false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify({name: "{{name}}", public_key: "{{public_key}}"}));
+        return JSON.parse(xhr.responseText);
+    }''')
+    response = await page.evaluate(codegen.render(name=name, public_key=key))
+    req_error = response['error']
+
+    if req_error is None:
+        if len(response['data']) == 1:
+            api_error = response['data'][0].get('err', None)
+            if api_error is not None:
+                print(f'Error: {api_error}')
+                await browser.close()
+                return
+        key_page = await browser.newPage()
+        key_list = await get_ssh_keys(key_page)
+        display_key_list(key_list)
+    else:
+        print(f'Error: {req_error}')
+
     await browser.close()
 
 
@@ -273,4 +315,13 @@ class Lambda:
     def keys(self):
         """List registered SSH keys."""
         ctx = list_ssh_keys(self._credentials)
+        self._run_api_fn(ctx)
+
+    def key_add(self, key, name=None):
+        """Add a new SSH key."""
+        if os.path.exists(os.path.expanduser(key)):
+            with open(os.path.expanduser(key), 'r') as f:
+                key = f.read().strip()
+
+        ctx = add_ssh_key(self._credentials, key=key, name=name)
         self._run_api_fn(ctx)
