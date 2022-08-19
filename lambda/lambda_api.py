@@ -116,13 +116,11 @@ async def provision(credentials, *, instance_type):
 
     if req_error is None:
         if len(response['data']) == 1:
-            data = response['data'][0]
-            if 'err' in data:
-                api_error = data['err']
+            api_error = response['data'][0].get('err', None)
+            if api_error is not None:
                 print(f'Error: {api_error}')
                 await browser.close()
                 return
-
         instance_page = await browser.newPage()
         instance_list = await get_instances(instance_page)
         display_instance_list(instance_list)
@@ -149,7 +147,7 @@ async def terminate(credentials, *, instance_ids):
     response = await page.evaluate(codegen.render(instance_ids=list(instance_ids)))
     req_error = response['error']
     if req_error is None:
-        print(f'Terminated instances {instance_ids}')
+        print(f'Terminated instances {list(instance_ids)}')
     else:
         print(f'Error: {req_error}')
 
@@ -187,7 +185,7 @@ class Lambda:
             for key, value in self._credentials.items():
                 f.write(f'{key} = {value}\n')
 
-    def start(self, name=None, instance_type='gpu.1x.rtx6000'):
+    def start(self, instance_type='gpu.1x.rtx6000'):
         """Start a new instance."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
