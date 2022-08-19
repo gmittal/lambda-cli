@@ -5,6 +5,7 @@ import os
 import pathlib
 
 import jinja2
+import pendulum
 import prettytable
 
 from pyppeteer import launch
@@ -13,6 +14,34 @@ LOGIN_URL = 'https://lambdalabs.com/cloud/login'
 DASHBOARD_URL = 'https://lambdalabs.com/cloud/dashboard/instances'
 CREDENTIALS_PATH = '~/.lambda/credentials'
 SESSION_COOKIE_PATH = '~/.lambda/session'
+
+
+def readable_time_duration(start, end=None):
+    """Human readable time duration from timestamps.
+
+    https://github.com/skypilot-org/skypilot/blob/master/sky/utils/log_utils.py#L70
+
+    Args:
+        start: Start timestamp.
+        end: End timestamp. If None, current time is used.
+    Returns:
+        Human readable time duration. e.g. "1 hour ago", "2 minutes ago", etc.
+    """
+    # start < 0 means that the starting time is not specified yet.
+    if start is None or start < 0:
+        return '-'
+    if end is not None:
+        end = pendulum.from_timestamp(end)
+    start_time = pendulum.from_timestamp(start)
+    duration = start_time.diff(end)
+    diff = start_time.diff_for_humans(end)
+    if duration.in_seconds() < 1:
+        diff = '< 1 second'
+    diff = diff.replace('second', 'sec')
+    diff = diff.replace('minute', 'min')
+    diff = diff.replace('hour', 'hr')
+
+    return diff
 
 
 async def start_session(credentials):
@@ -61,6 +90,34 @@ async def auth(page, *, email=None, password=None):
             break
 
 
+async def get_ssh_keys(page):
+    await page.goto('https://lambdalabs.com/cloud/ssh-keys')
+    key_data = await page.evaluate('''() => {
+        return document.querySelector("#dashboard-container").getAttribute('ng-init');
+    }''')
+    key_data = (key_data.encode('latin1')
+                .decode('unicode-escape')
+                .encode('latin1')
+                .decode('utf-8'))
+    key_list = json.loads(key_data.split("', \'")[-1][:-2])
+    return key_list
+
+
+async def list_ssh_keys(credentials):
+    browser, page = await start_session(credentials)
+    key_list = await get_ssh_keys(page)
+    table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'NAME', 'CREATED', 'PUB_KEY'])
+    table.left_padding_width = 0
+    table.right_padding_width = 2
+    for key in key_list:
+        table.add_row([key['id'],
+                       key['name'],
+                       readable_time_duration(key['created']),
+                       key['key'][:20] + '...'])
+    print(table)
+    await browser.close()
+
+
 async def get_instances(page):
     await page.goto('https://lambdalabs.com/api/cloud/instances')
     instance_list = await page.evaluate('''() => {
@@ -92,8 +149,18 @@ async def list_instances(credentials):
     await browser.close()
 
 
-async def provision(credentials, *, instance_type):
+async def provision(credentials, *, instance_type, ssh_key_id=None):
     browser, page = await start_session(credentials)
+
+    if ssh_key_id is None:
+        key_page = await browser.newPage()
+        key_list = await get_ssh_keys(key_page)
+        if len(key_list) == 0:
+            raise ValueError('No SSH keys found.')
+        default_key = key_list[0]
+        key_name = default_key['name']
+        ssh_key_id = default_key['id']
+        print(f'Defaulting to first key \'{key_name}\' ({ssh_key_id})')
 
     codegen = jinja2.Template('''() => {
         var xhr = new XMLHttpRequest();
@@ -104,12 +171,12 @@ async def provision(credentials, *, instance_type):
             params: {ttype: "{{instance_type}}",
                     quantity: 1,
                     region: "us-tx-1",
-                    public_key_id: "be49bd118ea048a0b3fa50602e1f4d76",
+                    public_key_id: "{{key_id}}",
                     filesystem_id: null}
         }));
         return JSON.parse(xhr.responseText);
     }''')
-    response = await page.evaluate(codegen.render(instance_type=instance_type))
+    response = await page.evaluate(codegen.render(instance_type=instance_type, key_id=ssh_key_id))
     req_error = response['error']
 
     if req_error is None:
@@ -201,4 +268,9 @@ class Lambda:
     def ls(self):
         """List existing instances."""
         ctx = list_instances(self._credentials)
+        self._run_api_fn(ctx)
+
+    def keys(self):
+        """List registered SSH keys."""
+        ctx = list_ssh_keys(self._credentials)
         self._run_api_fn(ctx)

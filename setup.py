@@ -18,5 +18,5 @@ setup(
     packages=["lambda"],
     # package_data={'lambda': [ 'insttypes.txt', 'prices.csv' ]},
     entry_points={ 'console_scripts': [ 'lambda=lambda:main'] },
-    install_requires=[ 'fire', 'jinja2', 'prettytable', 'pyppeteer' ],
+    install_requires=[ 'fire', 'jinja2', 'pendulum', 'prettytable', 'pyppeteer' ],
 )
