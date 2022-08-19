@@ -62,14 +62,15 @@ async def auth(page, *, email=None, password=None):
             break
 
 
-async def list_instances(credentials):
-    browser, page = await start_session(credentials)
-
+async def get_instances(page):
     await page.goto('https://lambdalabs.com/api/cloud/instances')
     instance_list = await page.evaluate('''() => {
         return JSON.parse(document.body.innerText);
     }''')
+    return instance_list
 
+
+def display_instance_list(instance_list):
     if len(instance_list['data']) == 0:
         print('No existing instances.')
         return
@@ -84,6 +85,11 @@ async def list_instances(credentials):
         table.add_row([instance['id'], instance['ipv4'], instance['ttype'], instance_state])
     print(table)
 
+
+async def list_instances(credentials):
+    browser, page = await start_session(credentials)
+    instance_list = await get_instances(page)
+    display_instance_list(instance_list)
     await browser.close()
 
 
@@ -103,16 +109,31 @@ async def provision(credentials, *, instance_type):
                     public_key_id: "be49bd118ea048a0b3fa50602e1f4d76",
                     filesystem_id: null}
         }));
-        return xhr.responseText;
+        return JSON.parse(xhr.responseText);
     }''')
     response = await page.evaluate(codegen.render(instance_type=instance_type))
-    print(response)
+    req_error = response['error']
+
+    if req_error is None:
+        if len(response['data']) == 1:
+            data = response['data'][0]
+            if 'err' in data:
+                api_error = data['err']
+                print(f'Error: {api_error}')
+                await browser.close()
+                return
+
+        instance_page = await browser.newPage()
+        instance_list = await get_instances(instance_page)
+        display_instance_list(instance_list)
+    else:
+        print(f'Error: {req_error}')
 
     await browser.close()
 
 
 async def terminate(credentials, *, instance_ids):
-    assert isinstance(instance_ids, list), instance_ids
+    assert isinstance(instance_ids, list) or isinstance(instance_ids, tuple), instance_ids
     browser, page = await start_session(credentials)
 
     codegen = jinja2.Template('''() => {
@@ -123,10 +144,14 @@ async def terminate(credentials, *, instance_ids):
             method: "terminate",
             params: {instance_ids: {{instance_ids}}}
         }));
-        return xhr.responseText;
+        return JSON.parse(xhr.responseText);
     }''')
-    response = await page.evaluate(codegen.render(instance_ids=instance_ids))
-    print(response)
+    response = await page.evaluate(codegen.render(instance_ids=list(instance_ids)))
+    req_error = response['error']
+    if req_error is None:
+        print(f'Terminated instances {instance_ids}')
+    else:
+        print(f'Error: {req_error}')
 
     await browser.close()
 
@@ -145,6 +170,7 @@ class Lambda:
                 self._credentials = {line.split(' = ')[0]: line.split(' = ')[1] for line in lines}
 
     def auth(self):
+        """Authenticate with Lambda Labs API."""
         email_prompt = 'Lambda Email: '
         pw_prompt = 'Lambda Password: '
         if self._credentials is not None:
@@ -162,16 +188,19 @@ class Lambda:
                 f.write(f'{key} = {value}\n')
 
     def start(self, name=None, instance_type='gpu.1x.rtx6000'):
+        """Start a new instance."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
         loop.run_until_complete(provision(self._credentials, instance_type=instance_type))
 
-    def kill(self, instance_id):
+    def kill(self, *instance_ids):
+        """Terminate instances."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
-        loop.run_until_complete(terminate(self._credentials, instance_ids=[instance_id]))
+        loop.run_until_complete(terminate(self._credentials, instance_ids=instance_ids))
 
     def ls(self):
+        """List existing instances."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
         loop.run_until_complete(list_instances(self._credentials))
