@@ -183,20 +183,22 @@ class Lambda:
             for key, value in self._credentials.items():
                 f.write(f'{key} = {value}\n')
 
-    def up(self, instance_type='gpu.1x.rtx6000'):
-        """Start a new instance."""
+    def _run_api_fn(self, context):
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
-        loop.run_until_complete(provision(self._credentials, instance_type=instance_type))
+        loop.run_until_complete(context)
+
+    def up(self, instance_type='gpu.1x.rtx6000'):
+        """Start a new instance."""
+        ctx = provision(self._credentials, instance_type=instance_type)
+        self._run_api_fn(ctx)
 
     def rm(self, *instance_ids):
         """Terminate instances."""
-        loop = asyncio.get_event_loop()
-        loop.set_exception_handler(ignore_handler)
-        loop.run_until_complete(terminate(self._credentials, instance_ids=instance_ids))
+        ctx = terminate(self._credentials, instance_ids=instance_ids)
+        self._run_api_fn(ctx)
 
     def ls(self):
         """List existing instances."""
-        loop = asyncio.get_event_loop()
-        loop.set_exception_handler(ignore_handler)
-        loop.run_until_complete(list_instances(self._credentials))
+        ctx = list_instances(self._credentials)
+        self._run_api_fn(ctx)
