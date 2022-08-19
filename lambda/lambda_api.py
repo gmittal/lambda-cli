@@ -13,7 +13,6 @@ LOGIN_URL = 'https://lambdalabs.com/cloud/login'
 DASHBOARD_URL = 'https://lambdalabs.com/cloud/dashboard/instances'
 CREDENTIALS_PATH = '~/.lambda/credentials'
 SESSION_COOKIE_PATH = '~/.lambda/session'
-INSTANCE_TYPES = ['gpu.1x.rtx6000', 'gpu.8x.v100']
 
 
 async def start_session(credentials):
@@ -94,7 +93,6 @@ async def list_instances(credentials):
 
 
 async def provision(credentials, *, instance_type):
-    assert instance_type in INSTANCE_TYPES, instance_type
     browser, page = await start_session(credentials)
 
     codegen = jinja2.Template('''() => {
