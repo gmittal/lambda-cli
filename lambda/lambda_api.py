@@ -5,6 +5,7 @@ import os
 import pathlib
 
 import jinja2
+import prettytable
 
 from pyppeteer import launch
 
@@ -68,7 +69,20 @@ async def list_instances(credentials):
     instance_list = await page.evaluate('''() => {
         return JSON.parse(document.body.innerText);
     }''')
-    print(instance_list)
+
+    if len(instance_list['data']) == 0:
+        print('No existing instances.')
+        return
+
+    table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'IP', 'INSTANCE_TYPE', 'STATE'])
+    table.left_padding_width = 0
+    table.right_padding_width = 2
+    for instance in instance_list['data']:
+        instance_state = instance['state'].upper()
+        if instance_state == 'CONTACTABLE':
+            instance_state = 'RUNNING'
+        table.add_row([instance['id'], instance['ipv4'], instance['ttype'], instance_state])
+    print(table)
 
     await browser.close()
 
