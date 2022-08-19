@@ -183,13 +183,13 @@ class Lambda:
             for key, value in self._credentials.items():
                 f.write(f'{key} = {value}\n')
 
-    def start(self, instance_type='gpu.1x.rtx6000'):
+    def up(self, instance_type='gpu.1x.rtx6000'):
         """Start a new instance."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
         loop.run_until_complete(provision(self._credentials, instance_type=instance_type))
 
-    def kill(self, *instance_ids):
+    def rm(self, *instance_ids):
         """Terminate instances."""
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)

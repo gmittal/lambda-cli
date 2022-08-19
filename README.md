@@ -20,7 +20,7 @@ lambda auth
 Create instances:
 
 ```shell
-$ lambda start --instance_type=gpu.8x.v100
+$ lambda up --instance_type=gpu.8x.v100
 ```
 
 List existing instances:
@@ -34,7 +34,7 @@ ID                                IP               INSTANCE_TYPE  STATE
 Terminate instances:
 
 ```shell
-$ lambda kill 23d0a8af2e414762ab8a10d3841d9574
+$ lambda rm 23d0a8af2e414762ab8a10d3841d9574
 ```
 
 ## License
