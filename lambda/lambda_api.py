@@ -79,11 +79,13 @@ async def auth(page, *, email=None, password=None):
         await page.type('#email-input', email)
         await page.type('#password-input', password)
         await page.click('.blue')  # submission button
-        await page.screenshot({'path': os.path.expanduser('~/.lambda/debug_login.png')})
+        await page.screenshot(
+            {'path': os.path.expanduser('~/.lambda/debug_login.png')})
         await page.goto(DASHBOARD_URL)
 
     # show dashboard login
-    await page.screenshot({'path': os.path.expanduser('~/.lambda/debug_list.png')})
+    await page.screenshot(
+        {'path': os.path.expanduser('~/.lambda/debug_list.png')})
 
     # grab session cookie
     client = await page.target.createCDPSession()
@@ -98,12 +100,11 @@ async def auth(page, *, email=None, password=None):
 async def get_ssh_keys(page):
     await page.goto('https://lambdalabs.com/cloud/ssh-keys')
     key_data = await page.evaluate('''() => {
-        return document.querySelector("#dashboard-container").getAttribute('ng-init');
+        return document.querySelector("#dashboard-container")
+                       .getAttribute('ng-init');
     }''')
-    key_data = (key_data.encode('latin1')
-                .decode('unicode-escape')
-                .encode('latin1')
-                .decode('utf-8'))
+    key_data = (key_data.encode('latin1').decode('unicode-escape').encode(
+        'latin1').decode('utf-8'))
     key_list = json.loads(key_data.split("', \'")[-1][:-2])
     return key_list
 
@@ -113,14 +114,17 @@ def display_key_list(key_list):
         print('No existing keys.')
         return
 
-    table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'NAME', 'CREATED', 'PUB_KEY'])
+    table = prettytable.PrettyTable(
+        align='l',
+        border=False,
+        field_names=['ID', 'NAME', 'CREATED', 'PUB_KEY'])
     table.left_padding_width = 0
     table.right_padding_width = 2
     for key in key_list:
-        table.add_row([key['id'],
-                       key['name'],
-                       readable_time_duration(key['created']),
-                       key['key'][:20] + '...'])
+        table.add_row([
+            key['id'], key['name'],
+            readable_time_duration(key['created']), key['key'][:20] + '...'
+        ])
     print(table)
 
 
@@ -142,7 +146,8 @@ async def add_ssh_key(credentials, *, key, name=None):
         var xhr = new XMLHttpRequest();
         xhr.open("POST", "https://lambdalabs.com/api/cloud/keypairs", false);
         xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify({name: "{{name}}", public_key: "{{public_key}}"}));
+        xhr.send(JSON.stringify({name: "{{name}}",
+                                 public_key: "{{public_key}}"}));
         return JSON.parse(xhr.responseText);
     }''')
     response = await page.evaluate(codegen.render(name=name, public_key=key))
@@ -177,14 +182,19 @@ def display_instance_list(instance_list):
         print('No existing instances.')
         return
 
-    table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'IP', 'INSTANCE_TYPE', 'STATE'])
+    table = prettytable.PrettyTable(
+        align='l',
+        border=False,
+        field_names=['ID', 'IP', 'INSTANCE_TYPE', 'STATE'])
     table.left_padding_width = 0
     table.right_padding_width = 2
     for instance in instance_list['data']:
         instance_state = instance['state'].upper()
         if instance_state == 'CONTACTABLE':
             instance_state = 'RUNNING'
-        table.add_row([instance['id'], instance['ipv4'], instance['ttype'], instance_state])
+        table.add_row([
+            instance['id'], instance['ipv4'], instance['ttype'], instance_state
+        ])
     print(table)
 
 
@@ -210,7 +220,9 @@ async def provision(credentials, *, instance_type, ssh_key_id=None):
 
     codegen = jinja2.Template('''() => {
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "https://lambdalabs.com/api/cloud/instances-rpc", false);
+        xhr.open("POST",
+                 "https://lambdalabs.com/api/cloud/instances-rpc",
+                 false);
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.send(JSON.stringify({
             method: "launch",
@@ -222,7 +234,8 @@ async def provision(credentials, *, instance_type, ssh_key_id=None):
         }));
         return JSON.parse(xhr.responseText);
     }''')
-    response = await page.evaluate(codegen.render(instance_type=instance_type, key_id=ssh_key_id))
+    response = await page.evaluate(
+        codegen.render(instance_type=instance_type, key_id=ssh_key_id))
     req_error = response['error']
 
     if req_error is None:
@@ -242,12 +255,15 @@ async def provision(credentials, *, instance_type, ssh_key_id=None):
 
 
 async def terminate(credentials, *, instance_ids):
-    assert isinstance(instance_ids, list) or isinstance(instance_ids, tuple), instance_ids
+    assert isinstance(instance_ids, list) or isinstance(instance_ids,
+                                                        tuple), instance_ids
     browser, page = await start_session(credentials)
 
     codegen = jinja2.Template('''() => {
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "https://lambdalabs.com/api/cloud/instances-rpc", false);
+        xhr.open("POST",
+                 "https://lambdalabs.com/api/cloud/instances-rpc",
+                 false);
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.send(JSON.stringify({
             method: "terminate",
@@ -255,7 +271,8 @@ async def terminate(credentials, *, instance_ids):
         }));
         return JSON.parse(xhr.responseText);
     }''')
-    response = await page.evaluate(codegen.render(instance_ids=list(instance_ids)))
+    response = await page.evaluate(
+        codegen.render(instance_ids=list(instance_ids)))
     req_error = response['error']
     if req_error is None:
         print(f'Terminated instances {list(instance_ids)}')
@@ -273,15 +290,14 @@ async def show_usage(credentials, show_all=False):
     account_data = await page.evaluate('''() => {
         return document.querySelector("section.view").getAttribute('ng-init');
     }''')
-    account_data = (account_data.encode('latin1')
-                .decode('unicode-escape')
-                .encode('latin1')
-                .decode('utf-8'))
+    account_data = (account_data.encode('latin1').decode(
+        'unicode-escape').encode('latin1').decode('utf-8'))
     account_data = json.loads(account_data[6:-2])
     account_id = account_data['id']
 
     # get usage information
-    await page.goto(f'https://lambdalabs.com/api/cloud/usage?account_id={account_id}')
+    await page.goto(
+        f'https://lambdalabs.com/api/cloud/usage?account_id={account_id}')
     usage_list = await page.evaluate('''() => {
         return JSON.parse(document.body.innerText);
     }''')
@@ -300,7 +316,10 @@ async def show_usage(credentials, show_all=False):
             continue
 
         instance_bills = month_usage['instance_bills']
-        table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'INSTANCE_TYPE', 'RATE', 'USAGE', 'SPEND'])
+        table = prettytable.PrettyTable(
+            align='l',
+            border=False,
+            field_names=['ID', 'INSTANCE_TYPE', 'RATE', 'USAGE', 'SPEND'])
         table.left_padding_width = 0
         table.right_padding_width = 2
 
@@ -308,11 +327,15 @@ async def show_usage(credentials, show_all=False):
             instance = bill['instance']
             rate = bill['hourly_cost_pretty']
             hours_used = bill['hours_used_pretty']
-            table.add_row([instance['id'], instance['ttype'], f'{rate}/hour', f'{hours_used} hours', bill['spend_pretty']])
+            table.add_row([
+                instance['id'], instance['ttype'], f'{rate}/hour',
+                f'{hours_used} hours', bill['spend_pretty']
+            ])
 
         if active_months > 0 and show_all:
             print()
-        print(f'{Style.BRIGHT}{period.upper()}{Style.RESET_ALL} ({Fore.CYAN}{total_pretty}{Style.RESET_ALL})')
+        print(f'{Style.BRIGHT}{period.upper()}{Style.RESET_ALL} '
+              f'({Fore.CYAN}{total_pretty}{Style.RESET_ALL})')
         if show_all:
             print(table)
         active_months += 1
@@ -325,13 +348,17 @@ def ignore_handler(loop, context):
 
 
 class Lambda:
+
     def __init__(self):
         self._credentials_path = os.path.expanduser(CREDENTIALS_PATH)
         self._credentials = None
         if os.path.exists(self._credentials_path):
             with open(self._credentials_path, 'r') as f:
                 lines = [line.strip() for line in f.readlines() if '=' in line]
-                self._credentials = {line.split(' = ')[0]: line.split(' = ')[1] for line in lines}
+                self._credentials = {
+                    line.split(' = ')[0]: line.split(' = ')[1]
+                    for line in lines
+                }
 
     def auth(self):
         """Authenticate with Lambda Labs API."""
@@ -342,11 +369,14 @@ class Lambda:
             pw = '*' * 16 + self._credentials['password'][-4:]
             email_prompt = f'Lambda Email [{email}]: '
             pw_prompt = f'Lambda Password [{pw}]: '
-        self._credentials = {'email': input(email_prompt),
-                            'password': getpass.getpass(pw_prompt)}
+        self._credentials = {
+            'email': input(email_prompt),
+            'password': getpass.getpass(pw_prompt)
+        }
 
         # save credentials
-        pathlib.Path(self._credentials_path).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(self._credentials_path).parent.mkdir(parents=True,
+                                                          exist_ok=True)
         with open(self._credentials_path, 'w') as f:
             for key, value in self._credentials.items():
                 f.write(f'{key} = {value}\n')

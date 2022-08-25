@@ -4,7 +4,8 @@ from io import open
 
 here = path.abspath(path.dirname(__file__)) + '/'
 
-with open(path.join(here, 'README.md'), encoding='utf-8') as f: long_description = f.read()
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name='lambda',
@@ -17,6 +18,9 @@ setup(
     keywords='development',
     packages=["lambda"],
     # package_data={'lambda': [ 'insttypes.txt', 'prices.csv' ]},
-    entry_points={ 'console_scripts': [ 'lambda=lambda:main'] },
-    install_requires=[ 'colorama', 'fire', 'jinja2', 'pendulum', 'petname', 'prettytable', 'pyppeteer' ],
+    entry_points={'console_scripts': ['lambda=lambda:main']},
+    install_requires=[
+        'colorama', 'fire', 'jinja2', 'pendulum', 'petname', 'prettytable',
+        'pyppeteer'
+    ],
 )
