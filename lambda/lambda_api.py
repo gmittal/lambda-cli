@@ -4,12 +4,16 @@ import json
 import os
 import pathlib
 
+import colorama
 import jinja2
 import pendulum
 import petname
 import prettytable
 
 from pyppeteer import launch
+
+Fore = colorama.Fore
+Style = colorama.Style
 
 LOGIN_URL = 'https://lambdalabs.com/cloud/login'
 DASHBOARD_URL = 'https://lambdalabs.com/cloud/dashboard/instances'
@@ -261,6 +265,61 @@ async def terminate(credentials, *, instance_ids):
     await browser.close()
 
 
+async def show_usage(credentials, show_all=False):
+    browser, page = await start_session(credentials)
+
+    # get account metadata
+    await page.goto('https://lambdalabs.com/cloud/usage')
+    account_data = await page.evaluate('''() => {
+        return document.querySelector("section.view").getAttribute('ng-init');
+    }''')
+    account_data = (account_data.encode('latin1')
+                .decode('unicode-escape')
+                .encode('latin1')
+                .decode('utf-8'))
+    account_data = json.loads(account_data[6:-2])
+    account_id = account_data['id']
+
+    # get usage information
+    await page.goto(f'https://lambdalabs.com/api/cloud/usage?account_id={account_id}')
+    usage_list = await page.evaluate('''() => {
+        return JSON.parse(document.body.innerText);
+    }''')
+
+    # display billing info
+    if len(usage_list) == 0:
+        print('No usage information available.')
+        return
+
+    active_months = 0
+    for month_usage in usage_list:
+        period = month_usage['period']
+        total = month_usage['total']
+        total_pretty = month_usage['total_pretty']
+        if total == 0:
+            continue
+
+        instance_bills = month_usage['instance_bills']
+        table = prettytable.PrettyTable(align='l', border=False, field_names=['ID', 'INSTANCE_TYPE', 'RATE', 'USAGE', 'SPEND'])
+        table.left_padding_width = 0
+        table.right_padding_width = 2
+
+        for bill in instance_bills:
+            instance = bill['instance']
+            rate = bill['hourly_cost_pretty']
+            hours_used = bill['hours_used_pretty']
+            table.add_row([instance['id'], instance['ttype'], f'{rate}/hour', f'{hours_used} hours', bill['spend_pretty']])
+
+        if active_months > 0 and show_all:
+            print()
+        print(f'{Style.BRIGHT}{period.upper()}{Style.RESET_ALL} ({Fore.CYAN}{total_pretty}{Style.RESET_ALL})')
+        if show_all:
+            print(table)
+        active_months += 1
+
+    await browser.close()
+
+
 def ignore_handler(loop, context):
     del loop, context  # ignore everything
 
@@ -324,4 +383,9 @@ class Lambda:
                 key = f.read().strip()
 
         ctx = add_ssh_key(self._credentials, key=key, name=name)
+        self._run_api_fn(ctx)
+
+    def usage(self, all=False):
+        """Show instance usage and billing. Use --all to show details."""
+        ctx = show_usage(self._credentials, show_all=all)
         self._run_api_fn(ctx)
