@@ -17,10 +17,10 @@ setup(
     author='Gautam Mittal',
     keywords='development',
     packages=["lambda"],
-    # package_data={'lambda': [ 'insttypes.txt', 'prices.csv' ]},
+    package_data={'lambda': [ 'catalog.csv' ]},
     entry_points={'console_scripts': ['lambda=lambda:main']},
     install_requires=[
-        'colorama', 'fire', 'jinja2', 'pendulum', 'petname', 'prettytable',
+        'colorama', 'fire', 'jinja2', 'pandas', 'pendulum', 'petname', 'prettytable',
         'pyppeteer'
     ],
 )

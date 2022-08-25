@@ -6,6 +6,7 @@ import pathlib
 
 import colorama
 import jinja2
+import pandas
 import pendulum
 import petname
 import prettytable
@@ -19,6 +20,7 @@ LOGIN_URL = 'https://lambdalabs.com/cloud/login'
 DASHBOARD_URL = 'https://lambdalabs.com/cloud/dashboard/instances'
 CREDENTIALS_PATH = '~/.lambda/credentials'
 SESSION_COOKIE_PATH = '~/.lambda/session'
+here = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
 
 
 def readable_time_duration(start, end=None):
@@ -419,3 +421,32 @@ class Lambda:
         """Show instance usage and billing. Use --all to show details."""
         ctx = show_usage(self._credentials, show_all=all)
         self._run_api_fn(ctx)
+
+    def catalog(self):
+        """Show available instance types."""
+        df = pandas.read_csv(here / 'catalog.csv')
+        table = prettytable.PrettyTable(align='l',
+                                        border=False,
+                                        field_names=[
+                                            'INSTANCE_TYPE', 'GPUs',
+                                            'VRAM_PER_GPU', 'vCPUs', 'RAM',
+                                            'STORAGE', 'HOURLY_PRICE'
+                                        ])
+        table.left_padding_width = 0
+        table.right_padding_width = 2
+
+        for _, row in df.iterrows():
+            instance_type = row['InstanceType']
+            acc_name = row['AcceleratorName']
+            acc_count = row['AcceleratorCount']
+            host_mem = row['MemoryGiB']
+            gpu_mem = row['GpuMemGB']
+            hourly_price = row['Price']
+            vcpus = row['vCPUs']
+            storage = row['Storage']
+            table.add_row([
+                instance_type, f'{acc_count}x NVIDIA {acc_name}',
+                f'{gpu_mem}GB', vcpus, f'{host_mem}GiB', storage,
+                f'$ {hourly_price:.2f}'
+            ])
+        print(table)
