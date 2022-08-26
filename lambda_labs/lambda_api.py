@@ -130,14 +130,16 @@ def display_key_list(key_list):
     print(table)
 
 
-async def list_ssh_keys(credentials):
+async def list_ssh_keys(credentials, verbose=False):
     browser, page = await start_session(credentials)
     key_list = await get_ssh_keys(page)
-    display_key_list(key_list)
+    if verbose:
+        display_key_list(key_list)
     await browser.close()
+    return key_list
 
 
-async def add_ssh_key(credentials, *, key, name=None):
+async def add_ssh_key(credentials, *, key, name=None, verbose=False):
     if name is None:
         name = petname.Generate()
 
@@ -159,16 +161,26 @@ async def add_ssh_key(credentials, *, key, name=None):
         if len(response['data']) == 1:
             api_error = response['data'][0].get('err', None)
             if api_error is not None:
-                print(f'Error: {api_error}')
+                if verbose:
+                    print(f'Error: {api_error}')
                 await browser.close()
-                return
+                return None
+
         key_page = await browser.newPage()
         key_list = await get_ssh_keys(key_page)
-        display_key_list(key_list)
-    else:
-        print(f'Error: {req_error}')
+        if verbose:
+            display_key_list(key_list)
+        await browser.close()
+        for key_entry in key_list:
+            if key_entry['name'] == name and key_entry['key'] == key:
+                return key_entry
+        return None
 
-    await browser.close()
+    else:
+        if verbose:
+            print(f'Error: {req_error}')
+        await browser.close()
+        return None
 
 
 async def get_instances(page):
@@ -200,14 +212,20 @@ def display_instance_list(instance_list):
     print(table)
 
 
-async def list_instances(credentials):
+async def list_instances(credentials, verbose=False):
     browser, page = await start_session(credentials)
     instance_list = await get_instances(page)
-    display_instance_list(instance_list)
+    if verbose:
+        display_instance_list(instance_list)
     await browser.close()
+    return instance_list
 
 
-async def provision(credentials, *, instance_type, ssh_key_id=None):
+async def provision(credentials,
+                    *,
+                    instance_type,
+                    ssh_key_id=None,
+                    verbose=False):
     browser, page = await start_session(credentials)
 
     if ssh_key_id is None:
@@ -218,7 +236,8 @@ async def provision(credentials, *, instance_type, ssh_key_id=None):
         default_key = key_list[0]
         key_name = default_key['name']
         ssh_key_id = default_key['id']
-        print(f'Defaulting to first key \'{key_name}\' ({ssh_key_id})')
+        if verbose:
+            print(f'Defaulting to first key \'{key_name}\' ({ssh_key_id})')
 
     codegen = jinja2.Template('''() => {
         var xhr = new XMLHttpRequest();
@@ -240,23 +259,29 @@ async def provision(credentials, *, instance_type, ssh_key_id=None):
         codegen.render(instance_type=instance_type, key_id=ssh_key_id))
     req_error = response['error']
 
+    instance_list = None
     if req_error is None:
         if len(response['data']) == 1:
             api_error = response['data'][0].get('err', None)
             if api_error is not None:
-                print(f'Error: {api_error}')
+                if verbose:
+                    print(f'Error: {api_error}')
                 await browser.close()
-                return
+                return None
+
         instance_page = await browser.newPage()
         instance_list = await get_instances(instance_page)
-        display_instance_list(instance_list)
+        if verbose:
+            display_instance_list(instance_list)
     else:
-        print(f'Error: {req_error}')
+        if verbose:
+            print(f'Error: {req_error}')
 
     await browser.close()
+    return instance_list
 
 
-async def terminate(credentials, *, instance_ids):
+async def terminate(credentials, *, instance_ids, verbose=False):
     assert isinstance(instance_ids, list) or isinstance(instance_ids,
                                                         tuple), instance_ids
     browser, page = await start_session(credentials)
@@ -277,14 +302,18 @@ async def terminate(credentials, *, instance_ids):
         codegen.render(instance_ids=list(instance_ids)))
     req_error = response['error']
     if req_error is None:
-        print(f'Terminated instances {list(instance_ids)}')
+        if verbose:
+            print(f'Terminated instances {list(instance_ids)}')
+        await browser.close()
+        return True
     else:
-        print(f'Error: {req_error}')
+        if verbose:
+            print(f'Error: {req_error}')
+        await browser.close()
+        return False
 
-    await browser.close()
 
-
-async def show_usage(credentials, show_all=False):
+async def show_usage(credentials, show_all=False, verbose=False):
     browser, page = await start_session(credentials)
 
     # get account metadata
@@ -306,10 +335,11 @@ async def show_usage(credentials, show_all=False):
 
     # display billing info
     if len(usage_list) == 0:
-        print('No usage information available.')
-        return
+        if verbose:
+            print('No usage information available.')
+        return []
 
-    active_months = 0
+    active_months = []
     for month_usage in usage_list:
         period = month_usage['period']
         total = month_usage['total']
@@ -334,15 +364,17 @@ async def show_usage(credentials, show_all=False):
                 f'{hours_used} hours', bill['spend_pretty']
             ])
 
-        if active_months > 0 and show_all:
+        if len(active_months) > 0 and show_all and verbose:
             print()
-        print(f'{Style.BRIGHT}{period.upper()}{Style.RESET_ALL} '
-              f'({Fore.CYAN}{total_pretty}{Style.RESET_ALL})')
-        if show_all:
+        if verbose:
+            print(f'{Style.BRIGHT}{period.upper()}{Style.RESET_ALL} '
+                  f'({Fore.CYAN}{total_pretty}{Style.RESET_ALL})')
+        if show_all and verbose:
             print(table)
-        active_months += 1
+        active_months.append(month_usage)
 
     await browser.close()
+    return active_months
 
 
 def ignore_handler(loop, context):
@@ -351,9 +383,10 @@ def ignore_handler(loop, context):
 
 class Lambda:
 
-    def __init__(self):
+    def __init__(self, cli=False):
         self._credentials_path = os.path.expanduser(CREDENTIALS_PATH)
         self._credentials = None
+        self._cli = cli
         if os.path.exists(self._credentials_path):
             with open(self._credentials_path, 'r') as f:
                 lines = [line.strip() for line in f.readlines() if '=' in line]
@@ -386,27 +419,34 @@ class Lambda:
     def _run_api_fn(self, context):
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_handler)
-        loop.run_until_complete(context)
+        result = loop.run_until_complete(context)
+        if not self._cli:
+            return result
 
-    def up(self, instance_type='gpu.1x.rtx6000'):
+    def up(self, instance_type='gpu.1x.rtx6000', key=None):
         """Start a new instance."""
-        ctx = provision(self._credentials, instance_type=instance_type)
-        self._run_api_fn(ctx)
+        ctx = provision(self._credentials,
+                        instance_type=instance_type,
+                        ssh_key_id=key,
+                        verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def rm(self, *instance_ids):
         """Terminate instances."""
-        ctx = terminate(self._credentials, instance_ids=instance_ids)
-        self._run_api_fn(ctx)
+        ctx = terminate(self._credentials,
+                        instance_ids=instance_ids,
+                        verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def ls(self):
         """List existing instances."""
-        ctx = list_instances(self._credentials)
-        self._run_api_fn(ctx)
+        ctx = list_instances(self._credentials, verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def keys(self):
         """List registered SSH keys."""
-        ctx = list_ssh_keys(self._credentials)
-        self._run_api_fn(ctx)
+        ctx = list_ssh_keys(self._credentials, verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def key_add(self, key, name=None):
         """Add a new SSH key."""
@@ -414,13 +454,16 @@ class Lambda:
             with open(os.path.expanduser(key), 'r') as f:
                 key = f.read().strip()
 
-        ctx = add_ssh_key(self._credentials, key=key, name=name)
-        self._run_api_fn(ctx)
+        ctx = add_ssh_key(self._credentials,
+                          key=key,
+                          name=name,
+                          verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def usage(self, all=False):
         """Show instance usage and billing. Use --all to show details."""
-        ctx = show_usage(self._credentials, show_all=all)
-        self._run_api_fn(ctx)
+        ctx = show_usage(self._credentials, show_all=all, verbose=self._cli)
+        return self._run_api_fn(ctx)
 
     def catalog(self):
         """Show available instance types."""
@@ -449,4 +492,6 @@ class Lambda:
                 f'{gpu_mem}GB', vcpus, f'{host_mem}GiB', storage,
                 f'$ {hourly_price:.2f}'
             ])
-        print(table)
+        if self._cli:
+            print(table)
+        return df

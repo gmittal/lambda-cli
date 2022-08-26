@@ -18,10 +18,10 @@ setup(
     keywords='development',
     packages=["lambda_labs"],
     requires_python='>=3.6',
-    package_data={'lambda_labs': [ 'catalog.csv' ]},
+    package_data={'lambda_labs': ['catalog.csv']},
     entry_points={'console_scripts': ['lambda=lambda_labs:main']},
     install_requires=[
-        'colorama', 'fire', 'jinja2', 'pandas', 'pendulum', 'petname', 'prettytable',
-        'pyppeteer'
+        'colorama', 'fire', 'jinja2', 'pandas', 'pendulum', 'petname',
+        'prettytable', 'pyppeteer'
     ],
 )

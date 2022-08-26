@@ -3,7 +3,7 @@ from .lambda_api import *
 
 
 def main():
-    controller = Lambda()
+    controller = Lambda(cli=True)
     fire.Fire(controller)
 
 
