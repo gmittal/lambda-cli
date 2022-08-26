@@ -2,7 +2,11 @@
 CLI for managing [Lambda Labs](https://lambdalabs.com/service/gpu-cloud) instances.
 
 ## Installation
+```bash
+pip install lambda-cli
+```
 
+You may also install the package from source:
 ```bash
 git clone https://github.com/gmittal/lambda-cli
 cd lambda-cli
