@@ -9,7 +9,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='lambda-cli',
-    version='0.0.1',
+    version='1.0.0',
     description="Lambda Labs instance management",
     long_description=long_description,
     long_description_content_type='text/markdown',
