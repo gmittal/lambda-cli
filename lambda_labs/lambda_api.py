@@ -53,7 +53,10 @@ def readable_time_duration(start, end=None):
 
 
 async def start_session(credentials):
-    browser = await launch(headless=True)
+    browser = await launch(headless=True,
+                           handleSIGINT=False,
+                           handleSIGTERM=False,
+                           handleSIGHUP=False)
     page = await browser.newPage()
     await page.emulateMedia('screen')
     await auth(page,
@@ -460,7 +463,8 @@ class Lambda:
                 f.write(f'{key} = {value}\n')
 
     def _run_api_fn(self, context):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.set_exception_handler(ignore_handler)
         result = loop.run_until_complete(context)
         if not self._cli:
