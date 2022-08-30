@@ -166,7 +166,7 @@ async def add_ssh_key(credentials, *, key, name=None, verbose=False):
                     print(f'Error: {api_error}')
                 else:
                     await browser.close()
-                    raise ValueError(f'Error: {api_error}')
+                    raise LambdaError(api_error)
                 await browser.close()
                 return None
 
@@ -185,7 +185,7 @@ async def add_ssh_key(credentials, *, key, name=None, verbose=False):
             print(f'Error: {req_error}')
         else:
             await browser.close()
-            raise ValueError(f'Error: {req_error}')
+            raise LambdaError(req_error)
         await browser.close()
         return None
 
@@ -231,6 +231,7 @@ async def list_instances(credentials, verbose=False):
 async def provision(credentials,
                     *,
                     instance_type,
+                    region='us-tx-1',
                     ssh_key_id=None,
                     verbose=False):
     browser, page = await start_session(credentials)
@@ -239,7 +240,7 @@ async def provision(credentials,
         key_page = await browser.newPage()
         key_list = await get_ssh_keys(key_page)
         if len(key_list) == 0:
-            raise ValueError('No SSH keys found.')
+            raise LambdaError('No SSH keys found.')
         default_key = key_list[0]
         key_name = default_key['name']
         ssh_key_id = default_key['id']
@@ -256,14 +257,16 @@ async def provision(credentials,
             method: "launch",
             params: {ttype: "{{instance_type}}",
                     quantity: 1,
-                    region: "us-tx-1",
+                    region: "{{region}}",
                     public_key_id: "{{key_id}}",
                     filesystem_id: null}
         }));
         return JSON.parse(xhr.responseText);
     }''')
     response = await page.evaluate(
-        codegen.render(instance_type=instance_type, key_id=ssh_key_id))
+        codegen.render(instance_type=instance_type,
+                       key_id=ssh_key_id,
+                       region=region))
     req_error = response['error']
 
     instance_list = None
@@ -275,7 +278,7 @@ async def provision(credentials,
                     print(f'Error: {api_error}')
                 else:
                     await browser.close()
-                    raise ValueError(f'Error: {api_error}')
+                    raise LambdaError(api_error)
                 await browser.close()
                 return None
 
@@ -288,7 +291,7 @@ async def provision(credentials,
             print(f'Error: {req_error}')
         else:
             await browser.close()
-            raise ValueError(f'Error: {req_error}')
+            raise LambdaError(req_error)
 
     await browser.close()
     return instance_list
@@ -324,7 +327,7 @@ async def terminate(credentials, *, instance_ids, verbose=False):
             print(f'Error: {req_error}')
         else:
             await browser.close()
-            raise ValueError(f'Error: {req_error}')
+            raise LambdaError(req_error)
         await browser.close()
         return False
 
@@ -397,6 +400,10 @@ def ignore_handler(loop, context):
     del loop, context  # ignore everything
 
 
+class LambdaError(Exception):
+    __module__ = 'builtins'
+
+
 class Metadata:
     """Local metadata for a Lambda Labs instance."""
 
@@ -458,11 +465,12 @@ class Lambda:
         if not self._cli:
             return result
 
-    def up(self, instance_type='gpu.1x.rtx6000', key=None):
+    def up(self, instance_type='gpu.1x.rtx6000', key=None, region='us-tx-1'):
         """Start a new instance."""
         ctx = provision(self._credentials,
                         instance_type=instance_type,
                         ssh_key_id=key,
+                        region=region,
                         verbose=self._cli)
         return self._run_api_fn(ctx)
 
