@@ -232,6 +232,7 @@ async def provision(credentials,
                     *,
                     instance_type,
                     region='us-tx-1',
+                    count=1,
                     ssh_key_id=None,
                     verbose=False):
     browser, page = await start_session(credentials)
@@ -256,7 +257,7 @@ async def provision(credentials,
         xhr.send(JSON.stringify({
             method: "launch",
             params: {ttype: "{{instance_type}}",
-                    quantity: 1,
+                    quantity: {{count}},
                     region: "{{region}}",
                     public_key_id: "{{key_id}}",
                     filesystem_id: null}
@@ -266,12 +267,12 @@ async def provision(credentials,
     response = await page.evaluate(
         codegen.render(instance_type=instance_type,
                        key_id=ssh_key_id,
+                       count=count,
                        region=region))
     req_error = response['error']
-
     instance_list = None
     if req_error is None:
-        if len(response['data']) == 1:
+        if len(response['data']) > 0:
             api_error = response['data'][0].get('err', None)
             if api_error is not None:
                 if verbose:
@@ -465,12 +466,17 @@ class Lambda:
         if not self._cli:
             return result
 
-    def up(self, instance_type='gpu.1x.rtx6000', key=None, region='us-tx-1'):
+    def up(self,
+           instance_type='gpu.1x.rtx6000',
+           key=None,
+           region='us-tx-1',
+           count=1):
         """Start a new instance."""
         ctx = provision(self._credentials,
                         instance_type=instance_type,
                         ssh_key_id=key,
                         region=region,
+                        count=count,
                         verbose=self._cli)
         return self._run_api_fn(ctx)
 
