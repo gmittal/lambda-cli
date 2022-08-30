@@ -20,6 +20,7 @@ LOGIN_URL = 'https://lambdalabs.com/cloud/login'
 DASHBOARD_URL = 'https://lambdalabs.com/cloud/dashboard/instances'
 CREDENTIALS_PATH = '~/.lambda/credentials'
 SESSION_COOKIE_PATH = '~/.lambda/session'
+LOCAL_METADATA_PATH = '~/.lambda/metadata'
 here = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
 
 
@@ -379,6 +380,25 @@ async def show_usage(credentials, show_all=False, verbose=False):
 
 def ignore_handler(loop, context):
     del loop, context  # ignore everything
+
+
+class Metadata:
+    """Local metadata for a Lambda Labs instance."""
+
+    def __init__(self):
+        self._metadata_path = os.path.expanduser(LOCAL_METADATA_PATH)
+        self._metadata = {}
+        if os.path.exists(self._metadata_path):
+            with open(self._metadata_path, 'r') as f:
+                self._metadata = json.load(f)
+
+    def __getitem__(self, instance_id):
+        return self._metadata.get(instance_id)
+
+    def __setitem__(self, instance_id, value):
+        self._metadata[instance_id] = value
+        with open(self._metadata_path, 'w') as f:
+            json.dump(self._metadata, f)
 
 
 class Lambda:
