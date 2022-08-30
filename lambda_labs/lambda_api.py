@@ -164,6 +164,9 @@ async def add_ssh_key(credentials, *, key, name=None, verbose=False):
             if api_error is not None:
                 if verbose:
                     print(f'Error: {api_error}')
+                else:
+                    await browser.close()
+                    raise ValueError(f'Error: {api_error}')
                 await browser.close()
                 return None
 
@@ -180,6 +183,9 @@ async def add_ssh_key(credentials, *, key, name=None, verbose=False):
     else:
         if verbose:
             print(f'Error: {req_error}')
+        else:
+            await browser.close()
+            raise ValueError(f'Error: {req_error}')
         await browser.close()
         return None
 
@@ -267,6 +273,9 @@ async def provision(credentials,
             if api_error is not None:
                 if verbose:
                     print(f'Error: {api_error}')
+                else:
+                    await browser.close()
+                    raise ValueError(f'Error: {api_error}')
                 await browser.close()
                 return None
 
@@ -277,6 +286,9 @@ async def provision(credentials,
     else:
         if verbose:
             print(f'Error: {req_error}')
+        else:
+            await browser.close()
+            raise ValueError(f'Error: {req_error}')
 
     await browser.close()
     return instance_list
@@ -310,6 +322,9 @@ async def terminate(credentials, *, instance_ids, verbose=False):
     else:
         if verbose:
             print(f'Error: {req_error}')
+        else:
+            await browser.close()
+            raise ValueError(f'Error: {req_error}')
         await browser.close()
         return False
 
@@ -514,4 +529,5 @@ class Lambda:
             ])
         if self._cli:
             print(table)
-        return df
+        else:
+            return df
